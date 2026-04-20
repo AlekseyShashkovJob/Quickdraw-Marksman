@@ -110,6 +110,8 @@ static void PL_sendFirebaseFields(NSString *endpointURL)
 @property (atomic, assign) BOOL endpointRefreshAttempted;
 /// Используется для отображения ошибки подключения без presentViewController
 @property (nonatomic, strong) UIView *noInternetView;
+/// Полупрозрачный тёмный оверлей за экраном «Нет интернета»
+@property (nonatomic, strong) UIView *noInternetOverlay;
 
 @end
 
@@ -147,6 +149,7 @@ static void PL_sendFirebaseFields(NSString *endpointURL)
 {
     self.attributionData = nil;
     self.noInternetView.hidden = YES;
+    self.noInternetOverlay.hidden = YES;
 
     // ── Push-путь: приложение открыто тапом по уведомлению с URL ──────────────
     if (self.pendingPushURL) {
@@ -267,6 +270,20 @@ static void PL_sendFirebaseFields(NSString *endpointURL)
 
 - (void)pl_setupNoInternetView
 {
+    // Полупрозрачный тёмный фон
+    UIView *overlay = [[UIView alloc] init];
+    overlay.translatesAutoresizingMaskIntoConstraints = NO;
+    overlay.backgroundColor = [UIColor colorWithWhite:0.0 alpha:0.65];
+    overlay.hidden = YES;
+    [self.view addSubview:overlay];
+
+    [NSLayoutConstraint activateConstraints:@[
+        [overlay.topAnchor constraintEqualToAnchor:self.view.topAnchor],
+        [overlay.bottomAnchor constraintEqualToAnchor:self.view.bottomAnchor],
+        [overlay.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor],
+        [overlay.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor],
+    ]];
+
     UIView *container = [[UIView alloc] init];
     container.translatesAutoresizingMaskIntoConstraints = NO;
     container.hidden = YES;
@@ -300,18 +317,6 @@ static void PL_sendFirebaseFields(NSString *endpointURL)
     messageLabel.translatesAutoresizingMaskIntoConstraints = NO;
     [container addSubview:messageLabel];
 
-    UIButton *retryButton = [UIButton buttonWithType:UIButtonTypeSystem];
-    [retryButton setTitle:@"Retry" forState:UIControlStateNormal];
-    retryButton.titleLabel.font = [UIFont boldSystemFontOfSize:17];
-    [retryButton setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
-    retryButton.backgroundColor = [UIColor colorWithRed:0.20 green:0.48 blue:1.0 alpha:1.0];
-    retryButton.layer.cornerRadius = 14;
-    retryButton.translatesAutoresizingMaskIntoConstraints = NO;
-    [retryButton addTarget:self
-                    action:@selector(pl_retryButtonTapped)
-          forControlEvents:UIControlEventTouchUpInside];
-    [container addSubview:retryButton];
-
     [NSLayoutConstraint activateConstraints:@[
         [container.centerXAnchor constraintEqualToAnchor:self.view.centerXAnchor],
         [container.centerYAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.centerYAnchor],
@@ -330,20 +335,11 @@ static void PL_sendFirebaseFields(NSString *endpointURL)
         [messageLabel.topAnchor constraintEqualToAnchor:titleLabel.bottomAnchor constant:10],
         [messageLabel.leadingAnchor constraintEqualToAnchor:container.leadingAnchor],
         [messageLabel.trailingAnchor constraintEqualToAnchor:container.trailingAnchor],
-
-        [retryButton.topAnchor constraintEqualToAnchor:messageLabel.bottomAnchor constant:28],
-        [retryButton.centerXAnchor constraintEqualToAnchor:container.centerXAnchor],
-        [retryButton.widthAnchor constraintEqualToConstant:160],
-        [retryButton.heightAnchor constraintEqualToConstant:52],
-        [retryButton.bottomAnchor constraintEqualToAnchor:container.bottomAnchor],
+        [messageLabel.bottomAnchor constraintEqualToAnchor:container.bottomAnchor],
     ]];
 
+    self.noInternetOverlay = overlay;
     self.noInternetView = container;
-}
-
-- (void)pl_retryButtonTapped
-{
-    [self startChecks];
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -837,30 +833,10 @@ static void PL_sendFirebaseFields(NSString *endpointURL)
 
 - (void)pl_showNoInternetRetry
 {
-    // Если режим уже определён как webview и есть сохранённый URL —
-    // используем его как fallback вместо показа диалога «Нет интернета».
-    NSString *savedMode = [[NSUserDefaults standardUserDefaults] stringForKey:@"PLLaunchMode"];
-    if ([savedMode isEqualToString:@"webview"]) {
-        NSString *stored = [[NSUserDefaults standardUserDefaults] stringForKey:@"PLLastEndpointURLString"];
-        NSURL *storedURL = stored.length ? [NSURL URLWithString:stored] : nil;
-        if (storedURL) {
-            NSLog(@"[PreloadVC] No internet — using stored WebView URL as fallback: %@", storedURL);
-            [self pl_checkAndAskNotificationsIfNeededWithCompletion:^{
-                dispatch_async(dispatch_get_main_queue(), ^{
-                    [self->_spinner stopAnimating];
-                    if (self.onOpenURL) {
-                        self.onOpenURL(storedURL);
-                    } else {
-                        [[UIApplication sharedApplication] openURL:storedURL options:@{} completionHandler:nil];
-                    }
-                });
-            }];
-            return;
-        }
-    }
-
-    dispatch_async(dispatch_get_main_queue(), ^{        
+    NSLog(@"[PreloadVC] No internet — showing no connection UI");
+    dispatch_async(dispatch_get_main_queue(), ^{
         [self->_spinner stopAnimating];
+        self.noInternetOverlay.hidden = NO;
         self.noInternetView.hidden = NO;
     });
 }

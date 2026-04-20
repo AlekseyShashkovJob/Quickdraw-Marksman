@@ -3,6 +3,7 @@
 #import "WebViewController.h"
 #import "WebViewConfig.h"
 #import "EasyLaunchConfig.h"
+#import "ScreenCaptureBlocker.h"
 #import <UserNotifications/UserNotifications.h>
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -88,6 +89,9 @@
     // Устанавливаем делегат ПОСЛЕ super — иначе Unity перезапишет его в своём
     // didFinishLaunchingWithOptions.
     UNUserNotificationCenter.currentNotificationCenter.delegate = self;
+
+    // Защита от захвата экрана
+    //[[ScreenCaptureBlocker sharedBlocker] startProtecting];
 
     return result;
 }
